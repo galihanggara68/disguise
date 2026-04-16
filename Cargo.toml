@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.102"
+directories = "6.0.0"
+clap = { version = "4.5.31", features = ["derive"] }
+serde = { version = "1.0.218", features = ["derive"] }
+toml = "0.8.20"
+dialoguer = "0.11.0"
+comfy-table = "7.2.2"
+
+[dev-dependencies]
+tempfile = "3.17.1"
