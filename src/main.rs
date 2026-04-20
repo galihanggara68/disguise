@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use clap_complete::Shell;
 use directories::BaseDirs;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -40,7 +41,15 @@ enum Commands {
         interactive: bool,
     },
     /// List all managed scripts
-    List,
+    List {
+        /// Filter by name or description
+        #[arg(short, long)]
+        search: Option<String>,
+
+        /// Filter by tags (comma-separated, OR logic)
+        #[arg(short, long)]
+        tags: Option<String>,
+    },
     /// View details of a specific script
     Detail {
         /// Name of the script
@@ -54,6 +63,10 @@ enum Commands {
         /// Run in background
         #[arg(short, long)]
         background: bool,
+
+        /// Extra arguments to pass to the script
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
     /// Remove a managed script
     Remove {
@@ -93,6 +106,37 @@ enum Commands {
         #[arg(short, long)]
         interactive: bool,
     },
+    /// Manage tags for scripts
+    Tag {
+        #[command(subcommand)]
+        tag_command: TagCommands,
+    },
+    /// Generate shell completions
+    Completions {
+        /// The shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+}
+
+#[derive(Subcommand)]
+enum TagCommands {
+    /// Add tags to scripts
+    Add {
+        /// Tags to add (comma-separated)
+        tags: String,
+        /// Scripts to add tags to
+        #[arg(required = true)]
+        scripts: Vec<String>,
+    },
+    /// Remove tags from scripts
+    Remove {
+        /// Tags to remove (comma-separated)
+        tags: String,
+        /// Scripts to remove tags from
+        #[arg(required = true)]
+        scripts: Vec<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -112,14 +156,18 @@ fn main() -> Result<()> {
         }) => {
             commands::add::handle(&storage, name, command, description, tags, interactive)?;
         }
-        Some(Commands::List) => {
-            commands::list::handle(&storage)?;
+        Some(Commands::List { search, tags }) => {
+            commands::list::handle(&storage, search, tags)?;
         }
         Some(Commands::Detail { name }) => {
             commands::detail::handle(&storage, name)?;
         }
-        Some(Commands::Run { name, background }) => {
-            commands::run::handle(&storage, name, background, &config_dir)?;
+        Some(Commands::Run {
+            name,
+            background,
+            args,
+        }) => {
+            commands::run::handle(&storage, name, background, args, &config_dir)?;
         }
         Some(Commands::Remove {
             name,
@@ -145,6 +193,17 @@ fn main() -> Result<()> {
                 tags,
                 interactive,
             )?;
+        }
+        Some(Commands::Tag { tag_command }) => match tag_command {
+            TagCommands::Add { tags, scripts } => {
+                commands::tag::add(&storage, tags, scripts)?;
+            }
+            TagCommands::Remove { tags, scripts } => {
+                commands::tag::remove(&storage, tags, scripts)?;
+            }
+        },
+        Some(Commands::Completions { shell }) => {
+            commands::completions::handle::<Cli>(shell);
         }
         None => {
             println!("Use 'disguise --help' for usage information.");
