@@ -228,7 +228,8 @@ mod tests {
 
         let log_file_path = tmp_dir.path().join("logs").join("bashrc_test.log");
         let mut log_content = String::new();
-        for _ in 0..40 { // Give it more time as bash -i can be slow
+        for _ in 0..40 {
+            // Give it more time as bash -i can be slow
             if log_file_path.exists() {
                 log_content = fs::read_to_string(&log_file_path)?;
                 if log_content.trim().contains("sourced") {
@@ -246,7 +247,11 @@ mod tests {
             unsafe { std::env::set_var("SHELL", shell) };
         }
 
-        assert!(log_content.trim().contains("sourced"), "Log content was: {:?}", log_content);
+        assert!(
+            log_content.trim().contains("sourced"),
+            "Log content was: {:?}",
+            log_content
+        );
 
         Ok(())
     }
