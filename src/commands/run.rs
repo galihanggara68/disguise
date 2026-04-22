@@ -23,8 +23,8 @@ pub fn handle(
         c.arg("/C").arg(&full_command);
         c
     } else {
-        let mut c = std::process::Command::new("sh");
-        c.arg("-c").arg(&full_command);
+        let mut c = std::process::Command::new("bash");
+        c.arg("-i").arg("-c").arg(&full_command);
         c
     };
 
