@@ -64,6 +64,10 @@ enum Commands {
         #[arg(short, long)]
         background: bool,
 
+        /// Do not load .env file from current directory
+        #[arg(long)]
+        no_dotenv: bool,
+
         /// Extra arguments to pass to the script
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
@@ -106,10 +110,38 @@ enum Commands {
         #[arg(short, long)]
         interactive: bool,
     },
+    /// View script execution history
+    History {
+        /// Limit the number of history entries
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+
+        /// Filter history by script name
+        #[arg(short, long)]
+        script: Option<String>,
+    },
     /// Manage tags for scripts
     Tag {
         #[command(subcommand)]
         tag_command: TagCommands,
+    },
+    /// Export scripts to a file
+    Export {
+        /// Path to the export file
+        path: PathBuf,
+    },
+    /// Import scripts from a file
+    Import {
+        /// Path to the import file
+        path: PathBuf,
+
+        /// Replace existing scripts (default is merge)
+        #[arg(short, long)]
+        replace: bool,
+
+        /// Merge scripts with existing ones (default)
+        #[arg(short, long, default_value_t = true, overrides_with = "replace")]
+        merge: bool,
     },
     /// Generate shell completions
     Completions {
@@ -165,9 +197,10 @@ fn main() -> Result<()> {
         Some(Commands::Run {
             name,
             background,
+            no_dotenv,
             args,
         }) => {
-            commands::run::handle(&storage, name, background, args, &config_dir)?;
+            commands::run::handle(&storage, name, background, no_dotenv, args, &config_dir)?;
         }
         Some(Commands::Remove {
             name,
@@ -194,6 +227,9 @@ fn main() -> Result<()> {
                 interactive,
             )?;
         }
+        Some(Commands::History { limit, script }) => {
+            commands::history::handle(&storage, limit, script)?;
+        }
         Some(Commands::Tag { tag_command }) => match tag_command {
             TagCommands::Add { tags, scripts } => {
                 commands::tag::add(&storage, tags, scripts)?;
@@ -202,6 +238,16 @@ fn main() -> Result<()> {
                 commands::tag::remove(&storage, tags, scripts)?;
             }
         },
+        Some(Commands::Export { path }) => {
+            commands::export::handle(&storage, path)?;
+        }
+        Some(Commands::Import {
+            path,
+            replace,
+            merge: _,
+        }) => {
+            commands::import::handle(&storage, path, replace)?;
+        }
         Some(Commands::Completions { shell }) => {
             commands::completions::handle::<Cli>(shell);
         }

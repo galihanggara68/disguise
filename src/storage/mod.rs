@@ -1,4 +1,5 @@
 use crate::core::config::Config;
+use crate::core::history::HistoryEntry;
 use crate::core::script::Script;
 use anyhow::Result;
 
@@ -10,6 +11,8 @@ pub trait Storage {
     fn remove_script(&self, name: &str) -> Result<()>;
     fn get_script(&self, name: &str) -> Result<Script>;
     fn list_scripts(&self) -> Result<Vec<Script>>;
+    fn add_history_entry(&self, entry: HistoryEntry) -> Result<()>;
+    fn list_history(&self) -> Result<Vec<HistoryEntry>>;
 }
 
 pub mod fs;

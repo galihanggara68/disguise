@@ -1,18 +1,22 @@
 use crate::core::config::Config;
+use crate::core::history::HistoryEntry;
 use crate::core::script::Script;
 use crate::storage::Storage;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct FileSystemStorage {
     config_path: PathBuf,
+    history_path: PathBuf,
 }
 
 impl FileSystemStorage {
     pub fn new(config_dir: &Path) -> Self {
         Self {
             config_path: config_dir.join("scripts.toml"),
+            history_path: config_dir.join("history.json"),
         }
     }
 }
@@ -88,6 +92,39 @@ impl Storage for FileSystemStorage {
         scripts.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(scripts)
     }
+
+    fn add_history_entry(&self, entry: HistoryEntry) -> Result<()> {
+        let mut history: Vec<HistoryEntry> = if self.history_path.exists() {
+            let content = fs::read_to_string(&self.history_path)
+                .with_context(|| format!("Failed to read history from {:?}", self.history_path))?;
+            if content.trim().is_empty() {
+                Vec::new()
+            } else {
+                serde_json::from_str(&content).unwrap_or_default()
+            }
+        } else {
+            Vec::new()
+        };
+
+        history.push(entry);
+        let content = serde_json::to_string_pretty(&history)
+            .with_context(|| "Failed to serialize history")?;
+        fs::write(&self.history_path, content)
+            .with_context(|| format!("Failed to write history to {:?}", self.history_path))?;
+        Ok(())
+    }
+
+    fn list_history(&self) -> Result<Vec<HistoryEntry>> {
+        if !self.history_path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(&self.history_path)
+            .with_context(|| format!("Failed to read history from {:?}", self.history_path))?;
+        if content.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        serde_json::from_str(&content).with_context(|| "Failed to parse history")
+    }
 }
 
 #[cfg(test)]
@@ -104,6 +141,7 @@ mod tests {
             command: "echo test".to_string(),
             description: None,
             tags: vec![],
+            env: Default::default(),
         };
 
         storage.add_script(script.clone())?;
@@ -125,6 +163,7 @@ mod tests {
             command: "echo test".to_string(),
             description: None,
             tags: vec![],
+            env: Default::default(),
         };
 
         storage.add_script(script)?;
@@ -134,6 +173,7 @@ mod tests {
             command: "echo updated".to_string(),
             description: Some("desc".to_string()),
             tags: vec!["tag".to_string()],
+            env: Default::default(),
         };
 
         storage.update_script("test", updated_script.clone())?;
@@ -155,6 +195,7 @@ mod tests {
             command: "echo test".to_string(),
             description: None,
             tags: vec![],
+            env: Default::default(),
         };
 
         storage.add_script(script)?;
@@ -173,12 +214,14 @@ mod tests {
             command: "cmd".to_string(),
             description: None,
             tags: vec![],
+            env: Default::default(),
         })?;
         storage.add_script(Script {
             name: "a".to_string(),
             command: "cmd".to_string(),
             description: None,
             tags: vec![],
+            env: Default::default(),
         })?;
 
         let list = storage.list_scripts()?;
@@ -198,6 +241,65 @@ mod tests {
         let config = storage.load_config()?;
         assert!(config.scripts.is_empty());
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_add_history_entry() -> Result<()> {
+        let tmp_dir = tempdir()?;
+        let storage = FileSystemStorage::new(tmp_dir.path());
+        let entry = HistoryEntry {
+            script_name: "test".to_string(),
+            start_timestamp: 123456789,
+            duration_ms: 100,
+            exit_code: Some(0),
+        };
+
+        storage.add_history_entry(entry.clone())?;
+
+        let history_path = tmp_dir.path().join("history.json");
+        assert!(history_path.exists());
+
+        let content = fs::read_to_string(history_path)?;
+        let history: Vec<HistoryEntry> = serde_json::from_str(&content)?;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].script_name, "test");
+        assert_eq!(history[0].start_timestamp, 123456789);
+        assert_eq!(history[0].duration_ms, 100);
+        assert_eq!(history[0].exit_code, Some(0));
+
+        // Add another
+        let entry2 = HistoryEntry {
+            script_name: "test2".to_string(),
+            start_timestamp: 123456790,
+            duration_ms: 200,
+            exit_code: Some(1),
+        };
+        storage.add_history_entry(entry2)?;
+
+        let content = fs::read_to_string(tmp_dir.path().join("history.json"))?;
+        let history: Vec<HistoryEntry> = serde_json::from_str(&content)?;
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[1].script_name, "test2");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_list_history() -> Result<()> {
+        let tmp_dir = tempdir()?;
+        let storage = FileSystemStorage::new(tmp_dir.path());
+        let entry = HistoryEntry {
+            script_name: "test".to_string(),
+            start_timestamp: 123456789,
+            duration_ms: 100,
+            exit_code: Some(0),
+        };
+
+        storage.add_history_entry(entry.clone())?;
+        let history = storage.list_history()?;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].script_name, "test");
         Ok(())
     }
 }

@@ -16,6 +16,16 @@ pub fn handle(storage: &dyn Storage, name: String) -> Result<()> {
     ]);
     table.add_row(vec!["Tags", &script.tags.join(", ")]);
 
+    if !script.env.is_empty() {
+        let env_str = script
+            .env
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<String>>()
+            .join("\n");
+        table.add_row(vec!["Environment", &env_str]);
+    }
+
     println!("{table}");
     Ok(())
 }

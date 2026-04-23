@@ -1,6 +1,9 @@
 pub mod add;
 pub mod completions;
 pub mod detail;
+pub mod export;
+pub mod history;
+pub mod import;
 pub mod list;
 pub mod remove;
 pub mod run;

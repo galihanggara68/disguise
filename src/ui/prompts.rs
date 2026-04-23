@@ -46,6 +46,7 @@ pub fn prompt_for_script(
         command,
         description,
         tags,
+        env: std::collections::HashMap::new(),
     })
 }
 

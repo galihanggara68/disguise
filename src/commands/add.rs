@@ -29,6 +29,7 @@ pub fn handle(
             command,
             description,
             tags: tags_vec,
+            env: Default::default(),
         }
     };
 

@@ -45,6 +45,7 @@ pub fn handle(
             command: final_command,
             description: final_description,
             tags: final_tags,
+            env: existing_script.env,
         }
     };
 
@@ -89,6 +90,7 @@ mod tests {
             command: "echo test".to_string(),
             description: None,
             tags: vec![],
+            env: Default::default(),
         };
         storage.add_script(script)?;
 

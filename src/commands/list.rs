@@ -74,18 +74,21 @@ mod tests {
                 command: "echo 1".to_string(),
                 description: Some("Description for first script".to_string()),
                 tags: vec!["tag1".to_string(), "common".to_string()],
+                env: std::collections::HashMap::new(),
             },
             Script {
                 name: "another-script".to_string(),
                 command: "echo 2".to_string(),
                 description: Some("Second script description".to_string()),
                 tags: vec!["tag2".to_string(), "common".to_string()],
+                env: std::collections::HashMap::new(),
             },
             Script {
                 name: "third".to_string(),
                 command: "echo 3".to_string(),
                 description: None,
                 tags: vec!["unique".to_string()],
+                env: std::collections::HashMap::new(),
             },
         ];
 

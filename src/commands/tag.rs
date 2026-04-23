@@ -93,6 +93,7 @@ mod tests {
             command: "echo 1".to_string(),
             description: None,
             tags: vec!["old".to_string()],
+            env: Default::default(),
         })?;
 
         storage.add_script(Script {
@@ -100,6 +101,7 @@ mod tests {
             command: "echo 2".to_string(),
             description: None,
             tags: vec![],
+            env: Default::default(),
         })?;
 
         add(
@@ -127,6 +129,7 @@ mod tests {
             command: "echo 1".to_string(),
             description: None,
             tags: vec!["t1".to_string()],
+            env: Default::default(),
         })?;
 
         add(&storage, "t1".to_string(), vec!["s1".to_string()])?;
@@ -147,6 +150,7 @@ mod tests {
             command: "echo 1".to_string(),
             description: None,
             tags: vec!["t1".to_string(), "t2".to_string()],
+            env: std::collections::HashMap::new(),
         })?;
 
         storage.add_script(Script {
@@ -154,6 +158,7 @@ mod tests {
             command: "echo 2".to_string(),
             description: None,
             tags: vec!["t2".to_string(), "t3".to_string()],
+            env: std::collections::HashMap::new(),
         })?;
 
         remove(
