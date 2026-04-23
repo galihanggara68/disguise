@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/galihanggara68/disguise/actions/workflows/ci.yml/badge.svg)](https://github.com/galihanggara68/disguise/actions/workflows/ci.yml)
 
-**Disguise** is a lightweight CLI tool designed to simplify script management. It provides a central repository for your most-used shell scripts, allowing you to easily add, list, detail, and execute them (even in the background).
+**Disguise** is a powerful CLI tool designed to simplify script management. It provides a central repository for your most-used shell scripts, allowing you to easily add, list, search, and execute them with advanced environment and history tracking.
 
 All script definitions are stored in a human-readable TOML file located at `~/.config/disguise/scripts.toml`.
 
@@ -10,29 +10,15 @@ All script definitions are stored in a human-readable TOML file located at `~/.c
 
 - **Unified Interface:** Manage all your shell scripts and commands from one place.
 - **Background Execution:** Run scripts in the background with automatic logging to `~/.config/disguise/logs/`.
-- **Interactive Mode:** Add or update scripts via a guided interactive prompt.
-- **Table-based View:** Get a clean, formatted list of all your managed scripts.
-- **Persistence:** Automatic configuration and storage management.
+- **Interactive Shell Support:** Runs scripts in an interactive shell by default (bash/zsh), ensuring your aliases and functions are available.
+- **Dynamic Arguments:** Pass extra arguments to your scripts at runtime using the `--` separator.
+- **Environment Management:** Define script-specific environment variables and automatically load `.env` files.
+- **Execution History:** Track when scripts were run, their duration, and exit status.
+- **Search & Filter:** Quickly find scripts by name, description, or tags.
+- **Import/Export:** Easily backup or share your script collections.
+- **Shell Completions:** Native tab-completion support for Bash, Zsh, and Fish.
 
 ## Installation
-
-### Using curl (Recommended)
-
-To install the latest stable version of Disguise, run the following command in your terminal:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/galihanggara68/disguise/main/install.sh | bash
-```
-
-Alternatively, you can manually download the binary for your architecture from the [Releases page](https://github.com/galihanggara68/disguise/releases/latest).
-
-#### Manual Download Example (Linux x86_64)
-
-```bash
-curl -L https://github.com/galihanggara68/disguise/releases/latest/download/disguise-x86_64-unknown-linux-gnu -o disguise
-chmod +x disguise
-sudo mv disguise /usr/local/bin/
-```
 
 ### Using Cargo
 
@@ -42,11 +28,18 @@ If you have Rust installed, you can install directly via Cargo:
 cargo install --git https://github.com/galihanggara68/disguise.git
 ```
 
+### Using curl
+
+To install the latest stable version of Disguise:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/galihanggara68/disguise/main/install.sh | bash
+```
+
 ## Usage
 
 ### Adding a script
 
-You can add a script using flags:
 ```bash
 disguise add --name "deploy" --command "npm run build" --description "Builds project" --tags "web,prod"
 ```
@@ -56,12 +49,6 @@ Or use the interactive mode:
 disguise add --interactive
 ```
 
-### Listing scripts
-
-```bash
-disguise list
-```
-
 ### Running a script
 
 Foreground:
@@ -69,28 +56,64 @@ Foreground:
 disguise run deploy
 ```
 
+With extra arguments:
+```bash
+disguise run deploy -- verbose=true force=true
+```
+
 Background:
 ```bash
 disguise run deploy --background
 ```
-*Logs will be available at `~/.config/disguise/logs/deploy.log`.*
+*Logs available at `~/.config/disguise/logs/deploy.log`.*
 
-### Viewing script details
+### Listing and Searching
 
 ```bash
-disguise detail deploy
+# List all
+disguise list
+
+# Search by name/description
+disguise list --search "build"
+
+# Filter by tags
+disguise list --tags "web,prod"
 ```
 
-### Removing a script
+### Viewing History
 
 ```bash
-disguise remove deploy
+disguise history --limit 20
+disguise history --script deploy
+```
+
+### Managing Tags
+
+```bash
+disguise tag add "important,v2" script1 script2
+disguise tag remove "old" script3
+```
+
+### Export and Import
+
+```bash
+disguise export my_scripts.toml
+disguise import backup.toml --merge
+```
+
+### Shell Completions
+
+Generate completion scripts for your shell:
+```bash
+# For Zsh
+disguise completions zsh > ~/.oh-my-zsh/completions/_disguise
 ```
 
 ## Configuration
 
 Disguise stores its data in:
 - Configuration: `~/.config/disguise/scripts.toml`
+- History: `~/.config/disguise/history.json`
 - Logs: `~/.config/disguise/logs/`
 
 ## Development
@@ -101,16 +124,9 @@ Disguise stores its data in:
 ### Building and Testing
 
 ```bash
-# Build the project
 cargo build
-
-# Run tests
 cargo test
-
-# Run linting
-cargo clippy -- -D warnings
-
-# Format code
+cargo clippy
 cargo fmt
 ```
 
