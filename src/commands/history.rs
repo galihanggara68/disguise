@@ -12,7 +12,7 @@ pub fn handle(storage: &dyn Storage, limit: usize, script_name: Option<String>) 
     }
 
     // Sort by timestamp descending (newest first)
-    history.sort_by(|a, b| b.start_timestamp.cmp(&a.start_timestamp));
+    history.sort_by_key(|b| std::cmp::Reverse(b.start_timestamp));
 
     // Limit results
     let history = history.into_iter().take(limit).collect::<Vec<_>>();
