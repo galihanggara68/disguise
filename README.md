@@ -58,7 +58,7 @@ disguise run deploy
 
 With extra arguments:
 ```bash
-disguise run deploy -- verbose=true force=true
+disguise run deploy -- --verbose --force
 ```
 
 Background:
