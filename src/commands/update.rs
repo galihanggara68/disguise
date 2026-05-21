@@ -1,23 +1,48 @@
 use crate::core::script::Script;
 use crate::storage::Storage;
 use crate::ui::prompts::prompt_for_script;
-use anyhow::Result;
+use anyhow::{Context, Result};
+use std::fs;
+use std::io::{self, Read};
+use std::path::PathBuf;
 
 pub fn handle(
     storage: &dyn Storage,
     name: String,
     new_name: Option<String>,
     command: Option<String>,
+    file: Option<PathBuf>,
     description: Option<String>,
     tags: Option<String>,
     interactive: bool,
 ) -> Result<()> {
     let existing_script = storage.get_script(&name)?;
 
+    let resolved_command = if let Some(cmd) = command {
+        Some(cmd)
+    } else if let Some(path) = file {
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read command from file {:?}", path))?;
+        Some(content)
+    } else if !io::IsTerminal::is_terminal(&io::stdin()) {
+        let mut buffer = String::new();
+        io::stdin()
+            .read_to_string(&mut buffer)
+            .context("Failed to read from stdin")?;
+        let content = buffer.trim();
+        if content.is_empty() {
+            None
+        } else {
+            Some(content.to_string())
+        }
+    } else {
+        None
+    };
+
     let updated_script = if interactive {
         prompt_for_script(
             Some(new_name.unwrap_or_else(|| existing_script.name.clone())),
-            Some(command.unwrap_or_else(|| existing_script.command.clone())),
+            Some(resolved_command.unwrap_or_else(|| existing_script.command.clone())),
             description.or(existing_script.description.clone()),
             tags.or_else(|| {
                 if existing_script.tags.is_empty() {
@@ -29,7 +54,7 @@ pub fn handle(
         )?
     } else {
         let final_name = new_name.unwrap_or_else(|| existing_script.name.clone());
-        let final_command = command.unwrap_or_else(|| existing_script.command.clone());
+        let final_command = resolved_command.unwrap_or_else(|| existing_script.command.clone());
         let final_description = description.or(existing_script.description.clone());
         let final_tags = tags
             .map(|t| {
@@ -73,6 +98,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             false,
         );
         assert!(result.is_err());
@@ -99,6 +125,7 @@ mod tests {
             "test".to_string(),
             Some("new-test".to_string()),
             Some("echo new".to_string()),
+            None,
             Some("new desc".to_string()),
             Some("tag1,tag2".to_string()),
             false,
@@ -110,8 +137,6 @@ mod tests {
         assert_eq!(updated.description, Some("new desc".to_string()));
         assert_eq!(updated.tags, vec!["tag1".to_string(), "tag2".to_string()]);
 
-        // Old name should be gone (wait, update_script in FileSystemStorage doesn't handle name change correctly if it just overwrites by name)
-        // Let's check update_script implementation again.
         Ok(())
     }
 }

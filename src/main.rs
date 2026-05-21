@@ -28,6 +28,10 @@ enum Commands {
         #[arg(short, long)]
         command: Option<String>,
 
+        /// File containing the command to execute
+        #[arg(short, long)]
+        file: Option<PathBuf>,
+
         /// Description of the script
         #[arg(short, long)]
         description: Option<String>,
@@ -97,6 +101,10 @@ enum Commands {
         /// New command to execute
         #[arg(short, long)]
         command: Option<String>,
+
+        /// File containing the new command to execute
+        #[arg(short, long)]
+        file: Option<PathBuf>,
 
         /// New description of the script
         #[arg(short, long)]
@@ -182,11 +190,12 @@ fn main() -> Result<()> {
         Some(Commands::Add {
             name,
             command,
+            file,
             description,
             tags,
             interactive,
         }) => {
-            commands::add::handle(&storage, name, command, description, tags, interactive)?;
+            commands::add::handle(&storage, name, command, file, description, tags, interactive)?;
         }
         Some(Commands::List { search, tags }) => {
             commands::list::handle(&storage, search, tags)?;
@@ -213,6 +222,7 @@ fn main() -> Result<()> {
             name,
             new_name,
             command,
+            file,
             description,
             tags,
             interactive,
@@ -222,6 +232,7 @@ fn main() -> Result<()> {
                 name,
                 new_name,
                 command,
+                file,
                 description,
                 tags,
                 interactive,
