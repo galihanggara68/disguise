@@ -4,22 +4,30 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
-pub fn handle(storage: &dyn Storage, path: PathBuf, replace: bool) -> Result<()> {
-    let content = fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read import file from {:?}", path))?;
+pub struct ImportOptions {
+    pub path: PathBuf,
+    pub replace: bool,
+}
+
+pub fn handle(storage: &dyn Storage, options: ImportOptions) -> Result<()> {
+    let content = fs::read_to_string(&options.path)
+        .with_context(|| format!("Failed to read import file from {:?}", options.path))?;
 
     let imported_config: Config = toml::from_str(&content).with_context(|| {
         format!(
             "Failed to parse import file {:?}. Make sure it is a valid TOML configuration.",
-            path
+            options.path
         )
     })?;
 
-    if replace {
+    if options.replace {
         storage
             .save_config(&imported_config)
             .context("Failed to save imported configuration")?;
-        println!("Configuration replaced successfully from {:?}", path);
+        println!(
+            "Configuration replaced successfully from {:?}",
+            options.path
+        );
     } else {
         let mut current_config = storage
             .load_config()
@@ -40,7 +48,7 @@ pub fn handle(storage: &dyn Storage, path: PathBuf, replace: bool) -> Result<()>
         storage
             .save_config(&current_config)
             .context("Failed to save merged configuration")?;
-        println!("Configuration merged successfully from {:?}", path);
+        println!("Configuration merged successfully from {:?}", options.path);
     }
 
     Ok(())
@@ -80,7 +88,11 @@ mod tests {
         };
         fs::write(&import_path, toml::to_string(&new_config)?)?;
 
-        handle(&storage, import_path, true)?;
+        let options = ImportOptions {
+            path: import_path,
+            replace: true,
+        };
+        handle(&storage, options)?;
 
         let scripts = storage.list_scripts()?;
         assert_eq!(scripts.len(), 1);
@@ -131,7 +143,11 @@ mod tests {
         };
         fs::write(&import_path, toml::to_string(&new_config)?)?;
 
-        handle(&storage, import_path, false)?;
+        let options = ImportOptions {
+            path: import_path,
+            replace: false,
+        };
+        handle(&storage, options)?;
 
         let scripts = storage.list_scripts()?;
         assert_eq!(scripts.len(), 3);

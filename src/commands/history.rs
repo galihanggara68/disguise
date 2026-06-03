@@ -3,11 +3,16 @@ use anyhow::Result;
 use chrono::{DateTime, Local, Utc};
 use comfy_table::Table;
 
-pub fn handle(storage: &dyn Storage, limit: usize, script_name: Option<String>) -> Result<()> {
+pub struct HistoryOptions {
+    pub limit: usize,
+    pub script_name: Option<String>,
+}
+
+pub fn handle(storage: &dyn Storage, options: HistoryOptions) -> Result<()> {
     let mut history = storage.list_history()?;
 
     // Filter by script name
-    if let Some(name) = script_name {
+    if let Some(name) = options.script_name {
         history.retain(|e| e.script_name == name);
     }
 
@@ -15,7 +20,7 @@ pub fn handle(storage: &dyn Storage, limit: usize, script_name: Option<String>) 
     history.sort_by_key(|b| std::cmp::Reverse(b.start_timestamp));
 
     // Limit results
-    let history = history.into_iter().take(limit).collect::<Vec<_>>();
+    let history = history.into_iter().take(options.limit).collect::<Vec<_>>();
 
     if history.is_empty() {
         println!("No history found.");
@@ -78,7 +83,11 @@ mod tests {
 
         // Filter by script2
         // We can't easily capture stdout here, but we can verify it doesn't crash
-        let result = handle(&storage, 10, Some("test2".to_string()));
+        let options = HistoryOptions {
+            limit: 10,
+            script_name: Some("test2".to_string()),
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         Ok(())

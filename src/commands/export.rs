@@ -3,15 +3,20 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
-pub fn handle(storage: &dyn Storage, path: PathBuf) -> Result<()> {
+pub struct ExportOptions {
+    pub path: PathBuf,
+}
+
+pub fn handle(storage: &dyn Storage, options: ExportOptions) -> Result<()> {
     let config = storage
         .load_config()
         .context("Failed to load current configuration")?;
     let content = toml::to_string_pretty(&config).context("Failed to serialize configuration")?;
 
-    fs::write(&path, content).with_context(|| format!("Failed to write export to {:?}", path))?;
+    fs::write(&options.path, content)
+        .with_context(|| format!("Failed to write export to {:?}", options.path))?;
 
-    println!("Configuration exported successfully to {:?}", path);
+    println!("Configuration exported successfully to {:?}", options.path);
     Ok(())
 }
 
@@ -39,7 +44,10 @@ mod tests {
         storage.add_script(script.clone())?;
 
         let export_path = tmp_dir.path().join("export.toml");
-        handle(&storage, export_path.clone())?;
+        let options = ExportOptions {
+            path: export_path.clone(),
+        };
+        handle(&storage, options)?;
 
         assert!(export_path.exists());
         let content = fs::read_to_string(export_path)?;

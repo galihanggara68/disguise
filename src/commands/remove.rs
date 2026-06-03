@@ -2,22 +2,28 @@ use crate::storage::Storage;
 use crate::ui::prompts::confirm_removal;
 use anyhow::Result;
 
-pub fn handle(storage: &dyn Storage, name: String, interactive: bool, force: bool) -> Result<()> {
-    // Check if script exists first
-    let _ = storage.get_script(&name)?;
+pub struct RemoveOptions {
+    pub name: String,
+    pub interactive: bool,
+    pub force: bool,
+}
 
-    let should_remove = if force {
+pub fn handle(storage: &dyn Storage, options: RemoveOptions) -> Result<()> {
+    // Check if script exists first
+    let _ = storage.get_script(&options.name)?;
+
+    let should_remove = if options.force {
         true
-    } else if interactive {
-        confirm_removal(&name)?
+    } else if options.interactive {
+        confirm_removal(&options.name)?
     } else {
         // Default behavior: confirm if not forced
-        confirm_removal(&name)?
+        confirm_removal(&options.name)?
     };
 
     if should_remove {
-        storage.remove_script(&name)?;
-        println!("Script '{}' removed successfully.", name);
+        storage.remove_script(&options.name)?;
+        println!("Script '{}' removed successfully.", options.name);
     } else {
         println!("Removal cancelled.");
     }

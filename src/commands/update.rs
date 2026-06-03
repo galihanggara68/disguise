@@ -6,21 +6,22 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-pub fn handle(
-    storage: &dyn Storage,
-    name: String,
-    new_name: Option<String>,
-    command: Option<String>,
-    file: Option<PathBuf>,
-    description: Option<String>,
-    tags: Option<String>,
-    interactive: bool,
-) -> Result<()> {
-    let existing_script = storage.get_script(&name)?;
+pub struct UpdateOptions {
+    pub name: String,
+    pub new_name: Option<String>,
+    pub command: Option<String>,
+    pub file: Option<PathBuf>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub interactive: bool,
+}
 
-    let resolved_command = if let Some(cmd) = command {
+pub fn handle(storage: &dyn Storage, options: UpdateOptions) -> Result<()> {
+    let existing_script = storage.get_script(&options.name)?;
+
+    let resolved_command = if let Some(cmd) = options.command {
         Some(cmd)
-    } else if let Some(path) = file {
+    } else if let Some(path) = options.file {
         let content = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read command from file {:?}", path))?;
         Some(content)
@@ -39,12 +40,16 @@ pub fn handle(
         None
     };
 
-    let updated_script = if interactive {
+    let updated_script = if options.interactive {
         prompt_for_script(
-            Some(new_name.unwrap_or_else(|| existing_script.name.clone())),
+            Some(
+                options
+                    .new_name
+                    .unwrap_or_else(|| existing_script.name.clone()),
+            ),
             Some(resolved_command.unwrap_or_else(|| existing_script.command.clone())),
-            description.or(existing_script.description.clone()),
-            tags.or_else(|| {
+            options.description.or(existing_script.description.clone()),
+            options.tags.or_else(|| {
                 if existing_script.tags.is_empty() {
                     None
                 } else {
@@ -53,10 +58,13 @@ pub fn handle(
             }),
         )?
     } else {
-        let final_name = new_name.unwrap_or_else(|| existing_script.name.clone());
+        let final_name = options
+            .new_name
+            .unwrap_or_else(|| existing_script.name.clone());
         let final_command = resolved_command.unwrap_or_else(|| existing_script.command.clone());
-        let final_description = description.or(existing_script.description.clone());
-        let final_tags = tags
+        let final_description = options.description.or(existing_script.description.clone());
+        let final_tags = options
+            .tags
             .map(|t| {
                 t.split(',')
                     .map(|s| s.trim().to_string())
@@ -74,8 +82,8 @@ pub fn handle(
         }
     };
 
-    storage.update_script(&name, updated_script)?;
-    println!("Script '{}' updated successfully!", name);
+    storage.update_script(&options.name, updated_script)?;
+    println!("Script '{}' updated successfully!", options.name);
     Ok(())
 }
 
@@ -91,16 +99,17 @@ mod tests {
         let tmp_dir = tempdir()?;
         let storage = FileSystemStorage::new(tmp_dir.path());
 
-        let result = handle(
-            &storage,
-            "non-existent".to_string(),
-            None,
-            None,
-            None,
-            None,
-            None,
-            false,
-        );
+        let options = UpdateOptions {
+            name: "non-existent".to_string(),
+            new_name: None,
+            command: None,
+            file: None,
+            description: None,
+            tags: None,
+            interactive: false,
+        };
+
+        let result = handle(&storage, options);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
@@ -120,16 +129,17 @@ mod tests {
         };
         storage.add_script(script)?;
 
-        handle(
-            &storage,
-            "test".to_string(),
-            Some("new-test".to_string()),
-            Some("echo new".to_string()),
-            None,
-            Some("new desc".to_string()),
-            Some("tag1,tag2".to_string()),
-            false,
-        )?;
+        let options = UpdateOptions {
+            name: "test".to_string(),
+            new_name: Some("new-test".to_string()),
+            command: Some("echo new".to_string()),
+            file: None,
+            description: Some("new desc".to_string()),
+            tags: Some("tag1,tag2".to_string()),
+            interactive: false,
+        };
+
+        handle(&storage, options)?;
 
         let updated = storage.get_script("new-test")?;
         assert_eq!(updated.name, "new-test");

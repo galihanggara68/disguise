@@ -1,8 +1,14 @@
 use crate::storage::Storage;
 use anyhow::Result;
 
-pub fn add(storage: &dyn Storage, tags: String, scripts: Vec<String>) -> Result<()> {
-    let tags_to_add: Vec<String> = tags
+pub struct TagOptions {
+    pub tags: String,
+    pub scripts: Vec<String>,
+}
+
+pub fn add(storage: &dyn Storage, options: TagOptions) -> Result<()> {
+    let tags_to_add: Vec<String> = options
+        .tags
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -11,14 +17,14 @@ pub fn add(storage: &dyn Storage, tags: String, scripts: Vec<String>) -> Result<
     let mut config = storage.load_config()?;
 
     // Validate all scripts exist first
-    for script_name in &scripts {
+    for script_name in &options.scripts {
         if !config.scripts.iter().any(|s| s.name == *script_name) {
             anyhow::bail!("Script '{}' not found", script_name);
         }
     }
 
     let mut modified = false;
-    for script_name in &scripts {
+    for script_name in &options.scripts {
         if let Some(script) = config.scripts.iter_mut().find(|s| s.name == *script_name) {
             for tag in &tags_to_add {
                 if !script.tags.contains(tag) {
@@ -39,8 +45,9 @@ pub fn add(storage: &dyn Storage, tags: String, scripts: Vec<String>) -> Result<
     Ok(())
 }
 
-pub fn remove(storage: &dyn Storage, tags: String, scripts: Vec<String>) -> Result<()> {
-    let tags_to_remove: Vec<String> = tags
+pub fn remove(storage: &dyn Storage, options: TagOptions) -> Result<()> {
+    let tags_to_remove: Vec<String> = options
+        .tags
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -49,14 +56,14 @@ pub fn remove(storage: &dyn Storage, tags: String, scripts: Vec<String>) -> Resu
     let mut config = storage.load_config()?;
 
     // Validate all scripts exist first
-    for script_name in &scripts {
+    for script_name in &options.scripts {
         if !config.scripts.iter().any(|s| s.name == *script_name) {
             anyhow::bail!("Script '{}' not found", script_name);
         }
     }
 
     let mut modified = false;
-    for script_name in &scripts {
+    for script_name in &options.scripts {
         if let Some(script) = config.scripts.iter_mut().find(|s| s.name == *script_name) {
             let original_len = script.tags.len();
             script.tags.retain(|t| !tags_to_remove.contains(t));
@@ -104,11 +111,11 @@ mod tests {
             env: Default::default(),
         })?;
 
-        add(
-            &storage,
-            "t1, t2".to_string(),
-            vec!["s1".to_string(), "s2".to_string()],
-        )?;
+        let options = TagOptions {
+            tags: "t1, t2".to_string(),
+            scripts: vec!["s1".to_string(), "s2".to_string()],
+        };
+        add(&storage, options)?;
 
         let s1 = storage.get_script("s1")?;
         assert_eq!(s1.tags, vec!["old", "t1", "t2"]);
@@ -132,7 +139,11 @@ mod tests {
             env: Default::default(),
         })?;
 
-        add(&storage, "t1".to_string(), vec!["s1".to_string()])?;
+        let options = TagOptions {
+            tags: "t1".to_string(),
+            scripts: vec!["s1".to_string()],
+        };
+        add(&storage, options)?;
 
         let s1 = storage.get_script("s1")?;
         assert_eq!(s1.tags, vec!["t1"]); // Still only one t1
@@ -161,11 +172,11 @@ mod tests {
             env: std::collections::HashMap::new(),
         })?;
 
-        remove(
-            &storage,
-            "t2, t3".to_string(),
-            vec!["s1".to_string(), "s2".to_string()],
-        )?;
+        let options = TagOptions {
+            tags: "t2, t3".to_string(),
+            scripts: vec!["s1".to_string(), "s2".to_string()],
+        };
+        remove(&storage, options)?;
 
         let s1 = storage.get_script("s1")?;
         assert_eq!(s1.tags, vec!["t1"]);
@@ -181,7 +192,11 @@ mod tests {
         let tmp_dir = tempdir()?;
         let storage = FileSystemStorage::new(tmp_dir.path());
 
-        let result = add(&storage, "t1".to_string(), vec!["nonexistent".to_string()]);
+        let options = TagOptions {
+            tags: "t1".to_string(),
+            scripts: vec!["nonexistent".to_string()],
+        };
+        let result = add(&storage, options);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),

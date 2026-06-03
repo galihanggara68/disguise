@@ -2,23 +2,24 @@ use crate::core::history::HistoryEntry;
 use crate::storage::Storage;
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-pub fn handle(
-    storage: &dyn Storage,
-    name: String,
-    background: bool,
-    no_dotenv: bool,
-    args: Vec<String>,
-    config_dir: &Path,
-) -> Result<()> {
-    let script = storage.get_script(&name)?;
+pub struct RunOptions {
+    pub name: String,
+    pub background: bool,
+    pub no_dotenv: bool,
+    pub args: Vec<String>,
+    pub config_dir: PathBuf,
+}
+
+pub fn handle(storage: &dyn Storage, options: RunOptions) -> Result<()> {
+    let script = storage.get_script(&options.name)?;
 
     let mut full_command = script.command.clone();
-    if !args.is_empty() {
+    if !options.args.is_empty() {
         full_command.push(' ');
-        full_command.push_str(&args.join(" "));
+        full_command.push_str(&options.args.join(" "));
     }
 
     let shell = std::env::var("SHELL")
@@ -53,7 +54,7 @@ pub fn handle(
     // Current Shell is inherited by default.
 
     // Load .env variables from current directory unless --no-dotenv is passed
-    if !no_dotenv {
+    if !options.no_dotenv {
         for (key, value) in dotenvy::dotenv_iter().into_iter().flatten().flatten() {
             cmd.env(key, value);
         }
@@ -68,8 +69,8 @@ pub fn handle(
         .as_secs();
     let start_instant = Instant::now();
 
-    if background {
-        let logs_dir = config_dir.join("logs");
+    if options.background {
+        let logs_dir = options.config_dir.join("logs");
         fs::create_dir_all(&logs_dir).with_context(|| "Failed to create logs directory")?;
         let log_file_path = logs_dir.join(format!("{}.log", script.name));
         let log_file = fs::File::create(&log_file_path)
@@ -85,7 +86,7 @@ pub fn handle(
 
         // For background tasks, we log that it started with no duration/exit code yet
         let entry = HistoryEntry {
-            script_name: name,
+            script_name: options.name,
             start_timestamp,
             duration_ms: 0,
             exit_code: None,
@@ -101,7 +102,7 @@ pub fn handle(
         let exit_code = status.code();
 
         let entry = HistoryEntry {
-            script_name: name,
+            script_name: options.name,
             start_timestamp,
             duration_ms,
             exit_code,
@@ -129,14 +130,15 @@ mod tests {
         let tmp_dir = tempdir()?;
         let storage = FileSystemStorage::new(tmp_dir.path());
 
-        let result = handle(
-            &storage,
-            "non-existent".to_string(),
-            false,
-            false,
-            vec![],
-            tmp_dir.path(),
-        );
+        let options = RunOptions {
+            name: "non-existent".to_string(),
+            background: false,
+            no_dotenv: false,
+            args: vec![],
+            config_dir: tmp_dir.path().to_path_buf(),
+        };
+
+        let result = handle(&storage, options);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
@@ -157,14 +159,15 @@ mod tests {
         };
         storage.add_script(script)?;
 
-        let result = handle(
-            &storage,
-            "test".to_string(),
-            true,
-            false,
-            vec!["hello".to_string(), "world".to_string()],
-            tmp_dir.path(),
-        );
+        let options = RunOptions {
+            name: "test".to_string(),
+            background: true,
+            no_dotenv: false,
+            args: vec!["hello".to_string(), "world".to_string()],
+            config_dir: tmp_dir.path().to_path_buf(),
+        };
+
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         // Wait up to 2 seconds for the process to finish and write logs
@@ -212,14 +215,15 @@ mod tests {
         };
         storage.add_script(script)?;
 
-        let result = handle(
-            &storage,
-            "env_test".to_string(),
-            true,
-            false,
-            vec![],
-            tmp_dir.path(),
-        );
+        let options = RunOptions {
+            name: "env_test".to_string(),
+            background: true,
+            no_dotenv: false,
+            args: vec![],
+            config_dir: tmp_dir.path().to_path_buf(),
+        };
+
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         let log_file_path = tmp_dir.path().join("logs").join("env_test.log");
@@ -267,14 +271,15 @@ mod tests {
         let old_shell = std::env::var("SHELL").ok();
         unsafe { std::env::set_var("SHELL", "/bin/bash") };
 
-        let result = handle(
-            &storage,
-            "bashrc_test".to_string(),
-            true,
-            false,
-            vec![],
-            tmp_dir.path(),
-        );
+        let options = RunOptions {
+            name: "bashrc_test".to_string(),
+            background: true,
+            no_dotenv: false,
+            args: vec![],
+            config_dir: tmp_dir.path().to_path_buf(),
+        };
+
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         let log_file_path = tmp_dir.path().join("logs").join("bashrc_test.log");
@@ -321,14 +326,15 @@ mod tests {
         };
         storage.add_script(script)?;
 
-        handle(
-            &storage,
-            "test_history".to_string(),
-            false,
-            false,
-            vec![],
-            tmp_dir.path(),
-        )?;
+        let options = RunOptions {
+            name: "test_history".to_string(),
+            background: false,
+            no_dotenv: false,
+            args: vec![],
+            config_dir: tmp_dir.path().to_path_buf(),
+        };
+
+        handle(&storage, options)?;
 
         let history_path = tmp_dir.path().join("history.json");
         assert!(history_path.exists());
@@ -380,14 +386,15 @@ mod tests {
         };
         storage.add_script(script)?;
 
-        let result = handle(
-            &storage,
-            "precedence_test".to_string(),
-            true,
-            false,
-            vec![],
-            tmp_dir.path(),
-        );
+        let options = RunOptions {
+            name: "precedence_test".to_string(),
+            background: true,
+            no_dotenv: false,
+            args: vec![],
+            config_dir: tmp_dir.path().to_path_buf(),
+        };
+
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         let log_file_path = tmp_dir.path().join("logs").join("precedence_test.log");
@@ -441,14 +448,15 @@ mod tests {
         storage.add_script(script)?;
 
         // Run with no_dotenv = true
-        let result = handle(
-            &storage,
-            "no_dotenv_test".to_string(),
-            true,
-            true, // no_dotenv
-            vec![],
-            tmp_dir.path(),
-        );
+        let options = RunOptions {
+            name: "no_dotenv_test".to_string(),
+            background: true,
+            no_dotenv: true, // no_dotenv
+            args: vec![],
+            config_dir: tmp_dir.path().to_path_buf(),
+        };
+
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         let log_file_path = tmp_dir.path().join("logs").join("no_dotenv_test.log");

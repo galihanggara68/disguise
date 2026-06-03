@@ -14,7 +14,12 @@ pub fn prompt_for_script(
         .interact_text()?;
 
     let command = if let Some(cmd) = initial_command {
-        if cmd.contains('\n') || Confirm::new().with_prompt("Edit command in editor?").default(false).interact()? {
+        if cmd.contains('\n')
+            || Confirm::new()
+                .with_prompt("Edit command in editor?")
+                .default(false)
+                .interact()?
+        {
             Editor::new().edit(&cmd)?.unwrap_or(cmd)
         } else {
             Input::<String>::new()
@@ -23,8 +28,12 @@ pub fn prompt_for_script(
                 .interact_text()?
         }
     } else {
-        if Confirm::new().with_prompt("Open editor for command?").default(true).interact()? {
-             Editor::new().edit("")?.unwrap_or_default()
+        if Confirm::new()
+            .with_prompt("Open editor for command?")
+            .default(true)
+            .interact()?
+        {
+            Editor::new().edit("")?.unwrap_or_default()
         } else {
             Input::<String>::new()
                 .with_prompt("Command")

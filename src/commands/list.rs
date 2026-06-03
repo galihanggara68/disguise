@@ -2,16 +2,24 @@ use crate::storage::Storage;
 use anyhow::Result;
 use comfy_table::Table;
 
-pub fn handle(storage: &dyn Storage, search: Option<String>, tags: Option<String>) -> Result<()> {
+pub struct ListOptions {
+    pub search: Option<String>,
+    pub tags: Option<String>,
+    pub names_only: bool,
+}
+
+pub fn handle(storage: &dyn Storage, options: ListOptions) -> Result<()> {
     let mut scripts = storage.list_scripts()?;
 
     if scripts.is_empty() {
-        println!("No scripts managed yet. Use 'disguise add' to add some.");
+        if !options.names_only {
+            println!("No scripts managed yet. Use 'disguise add' to add some.");
+        }
         return Ok(());
     }
 
     // Filter by search
-    if let Some(search) = search {
+    if let Some(search) = options.search {
         let search = search.to_lowercase();
         scripts.retain(|s| {
             s.name.to_lowercase().contains(&search)
@@ -23,7 +31,7 @@ pub fn handle(storage: &dyn Storage, search: Option<String>, tags: Option<String
     }
 
     // Filter by tags (OR logic for tags, but AND logic with search)
-    if let Some(tags_str) = tags {
+    if let Some(tags_str) = options.tags {
         let filter_tags: Vec<String> = tags_str
             .split(',')
             .map(|t| t.trim().to_lowercase())
@@ -40,7 +48,16 @@ pub fn handle(storage: &dyn Storage, search: Option<String>, tags: Option<String
     }
 
     if scripts.is_empty() {
-        println!("No scripts found matching your filters.");
+        if !options.names_only {
+            println!("No scripts found matching your filters.");
+        }
+        return Ok(());
+    }
+
+    if options.names_only {
+        for script in scripts {
+            println!("{}", script.name);
+        }
         return Ok(());
     }
 
@@ -104,7 +121,12 @@ mod tests {
         let tmp_dir = tempdir()?;
         let storage = setup_storage(tmp_dir.path())?;
 
-        let result = handle(&storage, None, None);
+        let options = ListOptions {
+            search: None,
+            tags: None,
+            names_only: false,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         Ok(())
@@ -116,7 +138,12 @@ mod tests {
         let storage = setup_storage(tmp_dir.path())?;
 
         // Should find "test-script-1" and "another-script" if searching "script"
-        let result = handle(&storage, Some("script".to_string()), None);
+        let options = ListOptions {
+            search: Some("script".to_string()),
+            tags: None,
+            names_only: false,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         Ok(())
@@ -128,7 +155,12 @@ mod tests {
         let storage = setup_storage(tmp_dir.path())?;
 
         // Should find "test-script-1" if searching "first"
-        let result = handle(&storage, Some("first".to_string()), None);
+        let options = ListOptions {
+            search: Some("first".to_string()),
+            tags: None,
+            names_only: false,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         Ok(())
@@ -140,11 +172,21 @@ mod tests {
         let storage = setup_storage(tmp_dir.path())?;
 
         // Should find "test-script-1" and "another-script" if filtering by "common"
-        let result = handle(&storage, None, Some("common".to_string()));
+        let options = ListOptions {
+            search: None,
+            tags: Some("common".to_string()),
+            names_only: false,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         // Should find all if filtering by "tag1,tag2,unique"
-        let result = handle(&storage, None, Some("tag1,tag2,unique".to_string()));
+        let options = ListOptions {
+            search: None,
+            tags: Some("tag1,tag2,unique".to_string()),
+            names_only: false,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         Ok(())
@@ -156,19 +198,21 @@ mod tests {
         let storage = setup_storage(tmp_dir.path())?;
 
         // Should find "test-script-1" if searching "script" and tag "tag1"
-        let result = handle(
-            &storage,
-            Some("script".to_string()),
-            Some("tag1".to_string()),
-        );
+        let options = ListOptions {
+            search: Some("script".to_string()),
+            tags: Some("tag1".to_string()),
+            names_only: false,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         // Should find nothing if searching "script" and tag "unique"
-        let result = handle(
-            &storage,
-            Some("script".to_string()),
-            Some("unique".to_string()),
-        );
+        let options = ListOptions {
+            search: Some("script".to_string()),
+            tags: Some("unique".to_string()),
+            names_only: false,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         Ok(())
@@ -179,7 +223,28 @@ mod tests {
         let tmp_dir = tempdir()?;
         let storage = FileSystemStorage::new(tmp_dir.path());
 
-        let result = handle(&storage, None, None);
+        let options = ListOptions {
+            search: None,
+            tags: None,
+            names_only: false,
+        };
+        let result = handle(&storage, options);
+        assert!(result.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_list_names_only() -> Result<()> {
+        let tmp_dir = tempdir()?;
+        let storage = setup_storage(tmp_dir.path())?;
+
+        let options = ListOptions {
+            search: None,
+            tags: None,
+            names_only: true,
+        };
+        let result = handle(&storage, options);
         assert!(result.is_ok());
 
         Ok(())

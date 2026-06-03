@@ -6,18 +6,19 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-pub fn handle(
-    storage: &dyn Storage,
-    name: Option<String>,
-    command: Option<String>,
-    file: Option<PathBuf>,
-    description: Option<String>,
-    tags: Option<String>,
-    interactive: bool,
-) -> Result<()> {
-    let resolved_command = if let Some(cmd) = command {
+pub struct AddOptions {
+    pub name: Option<String>,
+    pub command: Option<String>,
+    pub file: Option<PathBuf>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub interactive: bool,
+}
+
+pub fn handle(storage: &dyn Storage, options: AddOptions) -> Result<()> {
+    let resolved_command = if let Some(cmd) = options.command {
         Some(cmd)
-    } else if let Some(path) = file {
+    } else if let Some(path) = options.file {
         let content = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read command from file {:?}", path))?;
         Some(content)
@@ -36,12 +37,18 @@ pub fn handle(
         None
     };
 
-    let script = if interactive || (name.is_none() && resolved_command.is_none()) {
-        prompt_for_script(name, resolved_command, description, tags)?
+    let script = if options.interactive || (options.name.is_none() && resolved_command.is_none()) {
+        prompt_for_script(
+            options.name,
+            resolved_command,
+            options.description,
+            options.tags,
+        )?
     } else {
-        let name = name.context("Name is required in flag mode")?;
+        let name = options.name.context("Name is required in flag mode")?;
         let command = resolved_command.context("Command is required in flag mode")?;
-        let tags_vec = tags
+        let tags_vec = options
+            .tags
             .map(|t| {
                 t.split(',')
                     .map(|s| s.trim().to_string())
@@ -52,7 +59,7 @@ pub fn handle(
         Script {
             name,
             command,
-            description,
+            description: options.description,
             tags: tags_vec,
             env: Default::default(),
         }
