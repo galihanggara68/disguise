@@ -123,19 +123,49 @@ pub fn handle(storage: &dyn Storage, options: RunOptions) -> Result<()> {
 mod tests {
     use super::*;
     use crate::storage::fs::FileSystemStorage;
+    use std::sync::Mutex;
     use tempfile::tempdir;
+
+    // Use a global mutex to ensure tests that touch environment or CWD run serially
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+    struct TestEnv {
+        _guard: std::sync::MutexGuard<'static, ()>,
+        old_cwd: PathBuf,
+        tmp_dir: tempfile::TempDir,
+    }
+
+    impl TestEnv {
+        fn new() -> Result<Self> {
+            let guard = TEST_MUTEX.lock().unwrap();
+            let old_cwd = std::env::current_dir()?;
+            let tmp_dir = tempdir()?;
+            std::env::set_current_dir(tmp_dir.path())?;
+            Ok(Self {
+                _guard: guard,
+                old_cwd,
+                tmp_dir,
+            })
+        }
+    }
+
+    impl Drop for TestEnv {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.old_cwd);
+        }
+    }
 
     #[test]
     fn test_handle_run_script_not_found() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let storage = FileSystemStorage::new(tmp_dir.path());
+        let env = TestEnv::new()?;
+        let storage = FileSystemStorage::new(env.tmp_dir.path());
 
         let options = RunOptions {
             name: "non-existent".to_string(),
             background: false,
             no_dotenv: false,
             args: vec![],
-            config_dir: tmp_dir.path().to_path_buf(),
+            config_dir: env.tmp_dir.path().to_path_buf(),
         };
 
         let result = handle(&storage, options);
@@ -147,8 +177,8 @@ mod tests {
 
     #[test]
     fn test_handle_run_with_args_background() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let storage = FileSystemStorage::new(tmp_dir.path());
+        let env = TestEnv::new()?;
+        let storage = FileSystemStorage::new(env.tmp_dir.path());
 
         let script = crate::core::script::Script {
             name: "test".to_string(),
@@ -164,14 +194,14 @@ mod tests {
             background: true,
             no_dotenv: false,
             args: vec!["hello".to_string(), "world".to_string()],
-            config_dir: tmp_dir.path().to_path_buf(),
+            config_dir: env.tmp_dir.path().to_path_buf(),
         };
 
         let result = handle(&storage, options);
         assert!(result.is_ok());
 
         // Wait up to 2 seconds for the process to finish and write logs
-        let log_file_path = tmp_dir.path().join("logs").join("test.log");
+        let log_file_path = env.tmp_dir.path().join("logs").join("test.log");
         let mut log_content = String::new();
         for _ in 0..20 {
             if log_file_path.exists() {
@@ -183,16 +213,6 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        if !log_content.trim().ends_with("hello world") {
-            println!("Log file path: {:?}", log_file_path);
-            println!("Log content: {:?}", log_content);
-            if log_file_path.exists() {
-                let metadata = fs::metadata(&log_file_path)?;
-                println!("Log file size: {}", metadata.len());
-            } else {
-                println!("Log file does not exist");
-            }
-        }
         assert!(log_content.trim().ends_with("hello world"));
 
         Ok(())
@@ -200,8 +220,8 @@ mod tests {
 
     #[test]
     fn test_handle_run_environment_aware() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let storage = FileSystemStorage::new(tmp_dir.path());
+        let env_setup = TestEnv::new()?;
+        let storage = FileSystemStorage::new(env_setup.tmp_dir.path());
 
         // Set an env var
         unsafe { std::env::set_var("DISGUISE_TEST_VAR", "it_works") };
@@ -220,13 +240,13 @@ mod tests {
             background: true,
             no_dotenv: false,
             args: vec![],
-            config_dir: tmp_dir.path().to_path_buf(),
+            config_dir: env_setup.tmp_dir.path().to_path_buf(),
         };
 
         let result = handle(&storage, options);
         assert!(result.is_ok());
 
-        let log_file_path = tmp_dir.path().join("logs").join("env_test.log");
+        let log_file_path = env_setup.tmp_dir.path().join("logs").join("env_test.log");
         let mut log_content = String::new();
         for _ in 0..20 {
             if log_file_path.exists() {
@@ -247,15 +267,15 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn test_handle_run_bashrc_aware() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let storage = FileSystemStorage::new(tmp_dir.path());
+        let env_setup = TestEnv::new()?;
+        let storage = FileSystemStorage::new(env_setup.tmp_dir.path());
 
         // Mock HOME to tmp_dir
         let old_home = std::env::var("HOME").ok();
-        unsafe { std::env::set_var("HOME", tmp_dir.path()) };
+        unsafe { std::env::set_var("HOME", env_setup.tmp_dir.path()) };
 
         // Create a mock .bashrc
-        let bashrc_path = tmp_dir.path().join(".bashrc");
+        let bashrc_path = env_setup.tmp_dir.path().join(".bashrc");
         fs::write(&bashrc_path, "export MOCK_BASHRC_VAR=sourced")?;
 
         let script = crate::core::script::Script {
@@ -276,13 +296,17 @@ mod tests {
             background: true,
             no_dotenv: false,
             args: vec![],
-            config_dir: tmp_dir.path().to_path_buf(),
+            config_dir: env_setup.tmp_dir.path().to_path_buf(),
         };
 
         let result = handle(&storage, options);
         assert!(result.is_ok());
 
-        let log_file_path = tmp_dir.path().join("logs").join("bashrc_test.log");
+        let log_file_path = env_setup
+            .tmp_dir
+            .path()
+            .join("logs")
+            .join("bashrc_test.log");
         let mut log_content = String::new();
         for _ in 0..40 {
             // Give it more time as bash -i can be slow
@@ -314,8 +338,8 @@ mod tests {
 
     #[test]
     fn test_handle_run_history_logged() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let storage = FileSystemStorage::new(tmp_dir.path());
+        let env_setup = TestEnv::new()?;
+        let storage = FileSystemStorage::new(env_setup.tmp_dir.path());
 
         let script = crate::core::script::Script {
             name: "test_history".to_string(),
@@ -331,19 +355,18 @@ mod tests {
             background: false,
             no_dotenv: false,
             args: vec![],
-            config_dir: tmp_dir.path().to_path_buf(),
+            config_dir: env_setup.tmp_dir.path().to_path_buf(),
         };
 
         handle(&storage, options)?;
 
-        let history_path = tmp_dir.path().join("history.json");
+        let history_path = env_setup.tmp_dir.path().join("history.json");
         assert!(history_path.exists());
 
         let content = fs::read_to_string(history_path)?;
         let history: Vec<HistoryEntry> = serde_json::from_str(&content)?;
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].script_name, "test_history");
-        // Duration might be 0 on very fast systems, but let's check it's recorded
         assert_eq!(history[0].exit_code, Some(0));
 
         Ok(())
@@ -351,8 +374,8 @@ mod tests {
 
     #[test]
     fn test_handle_run_precedence() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let storage = FileSystemStorage::new(tmp_dir.path());
+        let env_setup = TestEnv::new()?;
+        let storage = FileSystemStorage::new(env_setup.tmp_dir.path());
 
         // Use a unique name for each var to avoid interference
         let shell_only_var = "SHELL_ONLY_VAR";
@@ -365,7 +388,7 @@ mod tests {
             std::env::set_var(shell_dotenv_toml_var, "shell_val");
         }
 
-        // Create .env file
+        // Create .env file in the current (temporary) directory
         let mut dotenv_content = String::new();
         dotenv_content.push_str(&format!("{}=dotenv_val\n", shell_dotenv_var));
         dotenv_content.push_str(&format!("{}=dotenv_val\n", shell_dotenv_toml_var));
@@ -391,13 +414,17 @@ mod tests {
             background: true,
             no_dotenv: false,
             args: vec![],
-            config_dir: tmp_dir.path().to_path_buf(),
+            config_dir: env_setup.tmp_dir.path().to_path_buf(),
         };
 
         let result = handle(&storage, options);
         assert!(result.is_ok());
 
-        let log_file_path = tmp_dir.path().join("logs").join("precedence_test.log");
+        let log_file_path = env_setup
+            .tmp_dir
+            .path()
+            .join("logs")
+            .join("precedence_test.log");
         let mut log_content = String::new();
         for _ in 0..20 {
             if log_file_path.exists() {
@@ -409,16 +436,23 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        // shell_only_var should be shell_val
-        // shell_dotenv_var should be dotenv_val
-        // shell_dotenv_toml_var should be toml_val
         let trimmed_content = log_content.trim();
-        assert!(trimmed_content.contains("shell_val"));
-        assert!(trimmed_content.contains("dotenv_val"));
-        assert!(trimmed_content.contains("toml_val"));
+        assert!(
+            trimmed_content.contains("shell_val"),
+            "Expected shell_val in output, got: {}",
+            trimmed_content
+        );
+        assert!(
+            trimmed_content.contains("dotenv_val"),
+            "Expected dotenv_val in output, got: {}",
+            trimmed_content
+        );
+        assert!(
+            trimmed_content.contains("toml_val"),
+            "Expected toml_val in output, got: {}",
+            trimmed_content
+        );
 
-        // cleanup
-        let _ = fs::remove_file(".env");
         unsafe {
             std::env::remove_var(shell_only_var);
             std::env::remove_var(shell_dotenv_var);
@@ -430,12 +464,12 @@ mod tests {
 
     #[test]
     fn test_handle_run_no_dotenv() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let storage = FileSystemStorage::new(tmp_dir.path());
+        let env_setup = TestEnv::new()?;
+        let storage = FileSystemStorage::new(env_setup.tmp_dir.path());
 
         let var_name = "DISGUISE_NO_DOTENV_TEST";
 
-        // Create .env file in current directory (where tests run)
+        // Create .env file in the current (temporary) directory
         fs::write(".env", format!("{}=dotenv_val\n", var_name))?;
 
         let script = crate::core::script::Script {
@@ -447,19 +481,22 @@ mod tests {
         };
         storage.add_script(script)?;
 
-        // Run with no_dotenv = true
         let options = RunOptions {
             name: "no_dotenv_test".to_string(),
             background: true,
-            no_dotenv: true, // no_dotenv
+            no_dotenv: true,
             args: vec![],
-            config_dir: tmp_dir.path().to_path_buf(),
+            config_dir: env_setup.tmp_dir.path().to_path_buf(),
         };
 
         let result = handle(&storage, options);
         assert!(result.is_ok());
 
-        let log_file_path = tmp_dir.path().join("logs").join("no_dotenv_test.log");
+        let log_file_path = env_setup
+            .tmp_dir
+            .path()
+            .join("logs")
+            .join("no_dotenv_test.log");
         let mut log_content = String::new();
         for _ in 0..20 {
             if log_file_path.exists() {
@@ -471,11 +508,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        // Should NOT contain dotenv_val
         assert!(!log_content.contains("dotenv_val"));
-
-        // cleanup
-        let _ = fs::remove_file(".env");
 
         Ok(())
     }
