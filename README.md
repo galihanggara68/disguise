@@ -1,9 +1,6 @@
 # Disguise
 
-![Version](https://badges.datenblick.space/version?owner=galihanggara68&repo=disguise)
-![Build Status](https://badges.datenblick.space/build-status?owner=galihanggara68&repo=disguise&label=CI)
-![License](https://badges.datenblick.space/license?license=MIT&shimmerInterval=5)
-![Stars](https://badges.datenblick.space/github/stars?owner=galihanggara68&repo=disguise)
+![Version](https://badges.datenblick.space/version?owner=galihanggara68&repo=disguise) ![Build Status](https://badges.datenblick.space/build-status?owner=galihanggara68&repo=disguise&label=CI) ![License](https://badges.datenblick.space/license?license=MIT&shimmerInterval=5) ![Stars](https://badges.datenblick.space/github/stars?owner=galihanggara68&repo=disguise)
 
 **Disguise** is a powerful CLI tool designed to simplify script management. It provides a central repository for your most-used shell scripts, allowing you to easily add, list, search, and execute them with advanced environment and history tracking.
 
