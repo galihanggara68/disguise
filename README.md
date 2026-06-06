@@ -1,6 +1,6 @@
 # Disguise
 
-[![CI](https://github.com/galihanggara68/disguise/actions/workflows/ci.yml/badge.svg)](https://github.com/galihanggara68/disguise/actions/workflows/ci.yml)
+![Build Status](https://badges.datenblick.space/build-status?owner=galihanggara68&repo=disguise&label=CI)
 
 **Disguise** is a powerful CLI tool designed to simplify script management. It provides a central repository for your most-used shell scripts, allowing you to easily add, list, search, and execute them with advanced environment and history tracking.
 
